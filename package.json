@@ -10,7 +10,6 @@
   },
   "license": "MPL-2.0",
   "type": "module",
-  "private": true,
   "devDependencies": {
     "@shelf/jest-mongodb": "^4.3.2",
     "fastify": "^4.28.1",
