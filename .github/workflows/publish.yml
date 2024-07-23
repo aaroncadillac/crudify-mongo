@@ -17,6 +17,10 @@ jobs:
         with:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
+      - name: Config git user & email
+        run: |
+          git config user.name "$(git log -n 1 --pretty=format:%an)"
+          git config user.email "$(git log -n 1 --pretty=format:%ae)"
       - name: Run my Action
         id: run-action
         uses: iuccio/npm-semver-publish-action@v1.0.0
