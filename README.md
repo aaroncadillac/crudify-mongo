@@ -60,7 +60,7 @@ const routes = ( fastify, opts, done ) => {
 ### Installation
 
 ```bash
-yarn install crudify-mongo
+yarn add @aaroncadillac/crudify-mongo
 ```
 
 ### Usage

@@ -1,11 +1,22 @@
 {
-  "name": "crudify-mongo",
+  "name": "@aaroncadillac/crudify-mongo",
   "version": "1.0.0",
   "description": "An automatic CRUD generator for fastify",
   "main": "crudify.js",
   "repository": "git@github.com:aaroncadillac/crudify-mongo.git",
   "author": "aaroncadillac",
+  "scripts": {
+    "test": "yarn node --experimental-vm-modules $(yarn bin jest)"
+  },
   "license": "MPL-2.0",
   "type": "module",
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@shelf/jest-mongodb": "^4.3.2",
+    "fastify": "^4.28.1",
+    "jest": "^29.7.0",
+    "mongoose": "^8.5.1",
+    "mongoose-paginate-v2": "^1.8.2",
+    "supertest": "^7.0.0"
+  }
 }
