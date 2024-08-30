@@ -112,14 +112,11 @@ function Crudify (fastify, opts, next) {
     }
   })
 
-  async function addAdditionalRoutes () {
-    if (opts.additionalRoutes) {
-      await opts.additionalRoutes(fastify, opts)
-    }
-    next()
-  }
-
-  addAdditionalRoutes()
+  if (opts.additionalRoutes) {
+    opts.additionalRoutes(fastify, opts)
+  } 
+  
+  next()
 }
 
 export {
