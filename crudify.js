@@ -112,10 +112,10 @@ function Crudify (fastify, opts, next) {
     }
   })
 
-  opts.additionalRoutes?.map(route => {
-    fastify.route(route)
-  })
-
+  if (opts.additionalRoutes) {
+    opts.additionalRoutes(fastify, opts)
+  } 
+  
   next()
 }
 
