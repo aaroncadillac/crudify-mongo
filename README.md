@@ -55,6 +55,116 @@ const routes = ( fastify, opts, done ) => {
   })
 ```
 
+### Swagger auto-documentation
+
+You can add Swagger auto-documentation to your API, using the [`@fastify/swagger`](https://github.com/fastify/fastify-swagger) and [`@fastify/swagger-ui`](https://github.com/fastify/fastify-swagger-ui) plugins.
+
+Once you have those plugins installed, you can use the following code to add Swagger auto-documentation to your API:
+
+```js
+// server.js
+
+import 'dotenv/config';
+import Fastify from 'fastify'
+import { dbConnection } from './db-connection.js';
+import { routes } from './routes.js';
+import * as Swagger  from '@fastify/swagger'
+import * as SwaggerUI from '@fastify/swagger-ui'
+
+const fastify = Fastify({
+  logger: true
+})
+
+fastify.register(await dbConnection)
+process.env.NODE_ENV == 'development' && fastify.register(Swagger) && await fastify.register(SwaggerUI, {
+  routePrefix: '/docs',
+  uiConfig: {
+    docExpansion: 'list',
+    deepLinking: true
+  },
+  uiHooks: {
+    onRequest: function (request, reply, next) { next() },
+    preHandler: function (request, reply, next) { next() }
+  },
+  staticCSP: true,
+  transformStaticCSP: (header) => header,
+  transformSpecification: (swaggerObject, request, reply) => { return swaggerObject },
+  transformSpecificationClone: true
+})
+
+fastify.register(routes)
+
+fastify.listen({ port: process.env.PORT || 3000, host: process.env.HOST || 'localhost' }, function (err, address) {
+  if (err) {
+    fastify.log.error(err)
+    process.exit(1)
+  }
+})
+```
+
+As you can see in the code above, you only need to import the `@fastify/swagger` and `@fastify/swagger-ui` plugins, and then use the `fastify.register` method to register the plugins., you even can customize your swagger documentation path and enable documentation only in development environment (recommended).
+
+### Body and Response schema auto generation
+
+To help you to use Swagger `crudify-mongo 1.5.0+` supports `body` and `response` schema auto generation, this feature is enable by default and you only need to install [`mongoose-schema-jsonschema`](https://github.com/DScheglov/mongoose-schema-jsonschema) to use it, this dependency helps you to use your mongoose model schema as a json schema compatible with fastify specification based on [AJV schema validation](https://ajv.js.org).
+
+Here an example
+
+```js
+// models/user.js
+
+import mongoose from 'mongoose';
+import paginate from 'mongoose-paginate-v2'; // Required for pagination
+import extendMongoose from 'mongoose-schema-jsonschema'; // Required for body and response schema auto generation
+
+extendMongoose(mongoose);
+
+const Schema = mongoose.Schema;
+
+const userSchema = new Schema({
+  name: {
+    type: String,
+    required: true,
+  },
+  age: {
+    type: Number,
+    required: true,
+  },
+  email: {
+    type: String,
+    required: true,
+  },
+}, {
+  timestamps: true,
+});
+
+userSchema.plugin(paginate);
+
+const UserSchema = userSchema.jsonSchema();
+const UserModel = mongoose.model('Users', userSchema);
+
+export {
+  UserModel,
+  UserSchema
+}
+```
+
+Then you need to add on the `JSONSchema` property of your fastify routes
+
+```js
+// routes.js
+import { Crudify } from '@aaroncadillac/crudify-mongo';
+import { UserModel, UserSchema } from './models/user.js';
+
+const routes = ( fastify, opts, done ) => {
+  fastify.register(Crudify, {
+    url: '/users',
+    Model: UserModel
+    JSONSchema: UserSchema
+  })
+}
+```
+
 ## Getting started
 
 ### Installation
