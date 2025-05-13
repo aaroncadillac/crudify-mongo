@@ -1,21 +1,96 @@
-function Crudify (fastify, opts, next) {
-  fastify.get(`${opts.url}`, opts, async (req, reply) => {
-    try {
-      opts = { ...opts,
-        schema: {
-          querystring: {
-            type: 'object',
-            properties: {
-              filters: {
-                type: 'string'
-              },
-              pagination: {
-                type: 'string'
-              }
+function removeKeys(obj, keysToRemove) {
+  if (typeof obj !== 'object' || obj === null) return;
+
+  for (const key in obj) {
+    if (keysToRemove.includes(key)) {
+      delete obj[key];
+    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+      removeKeys(obj[key], keysToRemove);
+    }
+  }
+}
+
+
+function addPostBody(opts) {
+  const schema = opts.JSONSchema
+  if ( schema ) {
+    const properties = {...schema.properties}
+    removeKeys(properties, ['x-ref'])
+    const newOpts = {
+      ...opts,
+      schema: {
+        ...opts.schema,
+        body: {
+          type: schema.type,
+          properties,
+          required: schema.required
+        }
+      }
+    }
+    delete newOpts.schema.body.properties._id
+    delete newOpts.schema.body.properties.createdAt
+    delete newOpts.schema.body.properties.updatedAt
+    return newOpts
+  } else {
+    return opts
+  }
+}
+
+function addGetResponseUnitary(opts) {
+  const schema = opts.JSONSchema
+  if ( schema ) {
+    const newOpts = {
+      ...opts,
+      schema: {
+        response: {
+          200: schema
+        }
+      }
+    }
+    return newOpts
+  } else {
+    return opts
+  }
+}
+
+function addGetResponseArray(opts) {
+  const schema = opts.JSONSchema
+  if ( schema ) {
+    const newOpts = {
+      ...opts,
+      schema: {
+        response: {
+          200: {
+            type: 'array',
+            items: schema
+          }
+        },
+        querystring: {
+          type: 'object',
+          properties: {
+            filters: {
+              type: 'string'
+            },
+            pagination: {
+              type: 'string'
             }
           }
         }
       }
+    }
+    return newOpts
+  } else {
+    return opts
+  }
+}
+
+function Crudify (fastify, opts, next) {
+  const optsGet = addGetResponseUnitary(opts)
+  const optsGetAll = addGetResponseArray(opts)
+  const optsPost = addPostBody(optsGet)
+  
+  fastify.get(`${opts.url}`, optsGetAll, async (req, reply) => {
+    try {
       const filterObject = JSON.parse(req.query.filters ||= '{}')
       for (const key in filterObject) {
         if (typeof filterObject[key] === 'string') {
@@ -31,7 +106,7 @@ function Crudify (fastify, opts, next) {
     }
   })
 
-  fastify.get(`${opts.url}/:id`, opts, async (req, reply) => {
+  fastify.get(`${opts.url}/:id`, optsGet, async (req, reply) => {
     try {
       const response = await opts.Model.findById(req.params.id)
       if (!response) {
@@ -48,7 +123,7 @@ function Crudify (fastify, opts, next) {
     }
   })
 
-  fastify.post(`${opts.url}`, opts, async (req, reply) => {
+  fastify.post(`${opts.url}`, optsPost, async (req, reply) => {
     try {
       await opts.Model.validate(req.body)
     } catch (err) {
@@ -60,8 +135,8 @@ function Crudify (fastify, opts, next) {
       throw new Error(err)
     }
   })
-
-  fastify.put(`${opts.url}/:id`, opts, async (req, reply) => {
+  
+  fastify.put(`${opts.url}/:id`, optsGet, async (req, reply) => {
     try {
       const response = await opts.Model.findOneAndUpdate({ _id: req.params.id }, req.body, { 
         new: true,

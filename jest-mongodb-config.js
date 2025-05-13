@@ -6,6 +6,7 @@ export default {
     },
     autoStart: false,
     instance: {},
+    replSet: false
   },
-  useSharedDBForAllJestWorkers: false
+  useSharedDBForAllJestWorkers: false,
 };
