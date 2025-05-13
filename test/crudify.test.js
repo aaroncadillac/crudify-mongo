@@ -39,6 +39,7 @@ describe('CRUD Operations', () => {
 
     it('should get all users', async () => {
         const response = await request(app.server).get('/users');
+        console.log(response.body)
         expect(response.status).toBe(200);
         expect(response.body.docs).toBeInstanceOf(Array);
     });

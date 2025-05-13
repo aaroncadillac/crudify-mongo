@@ -64,6 +64,17 @@ function addGetResponseArray(opts) {
             type: 'array',
             items: schema
           }
+        },
+        querystring: {
+          type: 'object',
+          properties: {
+            filters: {
+              type: 'string'
+            },
+            pagination: {
+              type: 'string'
+            }
+          }
         }
       }
     }
@@ -80,21 +91,6 @@ function Crudify (fastify, opts, next) {
   
   fastify.get(`${opts.url}`, optsGetAll, async (req, reply) => {
     try {
-      optsGetAll = { ...optsGetAll,
-        schema: {
-          querystring: {
-            type: 'object',
-            properties: {
-              filters: {
-                type: 'string'
-              },
-              pagination: {
-                type: 'string'
-              }
-            }
-          }
-        }
-      }
       const filterObject = JSON.parse(req.query.filters ||= '{}')
       for (const key in filterObject) {
         if (typeof filterObject[key] === 'string') {
