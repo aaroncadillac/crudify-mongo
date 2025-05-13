@@ -6,7 +6,7 @@
   "repository": "git@github.com:aaroncadillac/crudify-mongo.git",
   "author": "aaroncadillac",
   "scripts": {
-    "test": "l"
+    "test": "yarn node --experimental-vm-modules $(yarn bin jest)"
   },
   "license": "MPL-2.0",
   "type": "module",
