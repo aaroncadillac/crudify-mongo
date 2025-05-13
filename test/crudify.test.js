@@ -10,10 +10,7 @@ let connection;
 
 beforeAll(async () => {
     app = fastify();
-    await connect(global.__MONGO_URI__, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-    });
+    await connect(global.__MONGO_URI__);
     connection = mongoose.connection
     const userSchema = new Schema({ name: String, age: Number, email: String });
     userSchema.plugin(paginate);
