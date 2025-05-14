@@ -5,8 +5,7 @@ export default {
       skipMD5: true,
     },
     autoStart: false,
-    instance: {},
-    replSet: false
+    instance: {}
   },
   useSharedDBForAllJestWorkers: false,
 };
