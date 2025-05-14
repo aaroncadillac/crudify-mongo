@@ -1,6 +1,6 @@
 {
   "name": "@aaroncadillac/crudify-mongo",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "An automatic CRUD generator for fastify",
   "main": "crudify.js",
   "repository": "git@github.com:aaroncadillac/crudify-mongo.git",
