@@ -1,6 +1,9 @@
 # Crudify Mongo
 
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-blue.svg)](https://opensource.org/licenses/MPL-2.0)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/aaroncadillac/crudify-mongo/test.yml)
+![NPM Version](https://img.shields.io/npm/v/%40aaroncadillac%2Fcrudify-mongo)
+
 
 An automatic CRUD generator for [fastify](https://fastify.dev) and MongoDB, using [mongoose](https://mongoosejs.com),a nd adding basic features like pagination, filtering, and sorting.
 
