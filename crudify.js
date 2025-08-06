@@ -1,7 +1,8 @@
 function removeKeys(obj, keysToRemove) {
   if (typeof obj !== 'object' || obj === null) return;
 
-  for (const key in obj) {
+  const keys = Object.keys(obj);
+  for (const key of keys) {
     if (keysToRemove.includes(key)) {
       delete obj[key];
     } else if (typeof obj[key] === 'object' && obj[key] !== null) {
@@ -100,9 +101,9 @@ function Crudify (fastify, opts, next) {
         }
       }
       const paginateOptions = JSON.parse(req.query.pagination ||= '{"pagination": false}')
-      reply.type('application/json').code(200).send(await opts.Model.paginate(filterObject, paginateOptions))
+      return reply.type('application/json').code(200).send(await opts.Model.paginate(filterObject, paginateOptions))
     } catch (err) {
-      throw new Error(err)
+      return reply.type('application/json').code(500).send({ error: err.message || err })
     }
   })
 
@@ -110,31 +111,44 @@ function Crudify (fastify, opts, next) {
     try {
       const response = await opts.Model.findById(req.params.id)
       if (!response) {
-        reply.type('application/json').code(404).send({
+        return reply.type('application/json').code(404).send({
           status: 404,
           error: 'Not Found',
           message: `ID: ${ req.params.id } not found`
         })
       } else {
-        reply.type('application/json').code(200).send(response)
+        return reply.type('application/json').code(200).send(response)
       }
     } catch (err) {
-      throw new Error(err)
+      return reply.type('application/json').code(500).send({ error: err.message || err })
     }
   })
 
   fastify.post(`${opts.url}`, optsPost, async (req, reply) => {
-    try {
+  try {
+    if (Array.isArray(req.body)) {
+      await Promise.all(req.body.map(item => opts.Model.validate(item)))
+    } else if (typeof req.body === 'object' && req.body !== null) {
       await opts.Model.validate(req.body)
-    } catch (err) {
-      reply.type('application/json').code(400).send(err)
+    } else {
+      return reply.type('application/json').code(400).send({ error: "Invalid request body" })
     }
-    try {
-      reply.type('application/json').code(201).send(await new opts.Model(req.body).save())
-    } catch (err) {
-      throw new Error(err)
+  } catch (err) {
+    return reply.type('application/json').code(400).send({ error: err.message || err })
+  }
+  try {
+    let response;
+    if (Array.isArray(req.body)) {
+      await opts.Model.insertMany(req.body)
+      response = { message: "All documents created successfully" }
+    } else {
+      response = await opts.Model.create(req.body)
     }
-  })
+    return reply.type('application/json').code(201).send(response)
+  } catch (err) {
+    return reply.type('application/json').code(500).send({ error: err.message || err })
+  }
+})
   
   fastify.put(`${opts.url}/:id`, optsGet, async (req, reply) => {
     try {
@@ -143,13 +157,13 @@ function Crudify (fastify, opts, next) {
         runValidators: true
       })
       if (!response) {
-        reply.type('application/json').code(404).send({
+        return reply.type('application/json').code(404).send({
           status: 404,
           error: 'Not Found',
           message: `ID: ${ req.params.id } not found`
         })
       } else {
-        reply.type('application/json').code(200).send(response)
+        return reply.type('application/json').code(200).send(response)
       }
     } catch (err) {
       const requiredErrors = []
@@ -159,13 +173,13 @@ function Crudify (fastify, opts, next) {
         }
       }
       if (requiredErrors.length > 0) {
-        reply.type('application/json').code(400).send({
+        return reply.type('application/json').code(400).send({
           status: 400,
           error: 'Bad Request',
           message: `Fields: [${ requiredErrors.join(', ') }] are required and cannot be empty`
         })
       } else {
-        throw new Error(err)
+        return reply.type('application/json').code(500).send({ error: err.message || err })
       }
     }
   })
@@ -174,16 +188,16 @@ function Crudify (fastify, opts, next) {
     try {
       const response = await opts.Model.findOneAndDelete({ _id: req.params.id })
       if (!response) {
-        reply.type('application/json').code(404).send({
+        return reply.type('application/json').code(404).send({
           status: 404,
           error: 'Not Found',
           message: `ID: ${ req.params.id } not found`
         })
       } else {
-        reply.type('application/json').code(200).send(response)
+        return reply.type('application/json').code(200).send(response)
       }
     } catch (err) {
-      throw new Error(err)
+      return reply.type('application/json').code(500).send({ error: err.message || err })
     }
   })
 
