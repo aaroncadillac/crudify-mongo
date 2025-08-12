@@ -72,7 +72,7 @@ function addGetResponseArray(opts) {
             filters: {
               type: 'string'
             },
-            pagination: {
+            options: {
               type: 'string'
             }
           }
@@ -100,7 +100,7 @@ function Crudify (fastify, opts, next) {
           }
         }
       }
-      const paginateOptions = JSON.parse(req.query.pagination ||= '{"pagination": false}')
+      const paginateOptions = JSON.parse(req.query.options ||= '{"pagination": false}')
       return reply.type('application/json').code(200).send(await opts.Model.paginate(filterObject, paginateOptions))
     } catch (err) {
       return reply.type('application/json').code(500).send({ error: err.message || err })
