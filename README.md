@@ -30,13 +30,13 @@ An automatic CRUD generator for [fastify](https://fastify.dev) and MongoDB, usin
 
 You can automatically enjoy the following CRUD operations:
 
-| Route | Description | Additional built-in benefits |
-|-------|-------------|----|
-| `GET /` | Get all documents | `Pagination` `Filtering` `Sorting` |
-| `GET /:id` | Get a document by id | `Not-Found validation`|
-| `POST /` | Create a document | `Schema validation`|
-| `PUT /:id` | Update a document by id | `Not-Found validation` `Schema validation`|
-| `DELETE /:id` | Delete a document by id | `Not-Found validation` |
+| Route | Description | Additional built-in benefits |How to use|
+|-------|-------------|----|---|
+| `GET /` | Get all documents | `Pagination` `Filtering` `Sorting` |query parameters: `filters` and `options` for more details see [mongoose-paginate-v2 documentation](https://github.com/aravindnc/mongoose-paginate-v2#readme) |
+| `GET /:id` | Get a document by id | `Not-Found validation`|Activated by default|
+| `POST /` | Create a document | `Schema validation`|Activated by default|
+| `PUT /:id` | Update a document by id | `Not-Found validation` `Schema validation`|Activated by default|
+| `DELETE /:id` | Delete a document by id | `Not-Found validation` |Activated by default|
 
 ### Custom routes
 
@@ -58,7 +58,9 @@ const routes = ( fastify, opts, done ) => {
   })
 ```
 
-### Swagger auto-documentation
+### Swagger auto-documentation (WIP)
+
+> If you need to integrate Swagger auto-documentation, is necessary to export and process mongoose model to define schemas into `openapi.json`, this module is under development.
 
 You can add Swagger auto-documentation to your API, using the [`@fastify/swagger`](https://github.com/fastify/fastify-swagger) and [`@fastify/swagger-ui`](https://github.com/fastify/fastify-swagger-ui) plugins.
 
