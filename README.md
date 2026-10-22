@@ -136,6 +136,7 @@ The default limits (all configurable through `query`) are depth 4, 100 keys, 100
 | `routes` | none | `(api, ctx) => void`: add your own routes |
 | `actions` | none | Non-CRUD operations on one document, see below |
 | `strict` | `false` | Throw at startup if `scope` is missing or the sanitizer is disabled |
+| `createScope` | `'strict'` | When the scope's `{ $in }` keys are checked on create: `'strict'` (before `beforeCreate`) or `'after-hooks'` (on the final document), see "Deriving a scope key" |
 
 `query`: `operators`, `maxDepth`, `maxKeys`, `maxArray`, `maxBranches`, `search` (`'contains' | 'prefix' | false`), `maxSearchLength`, `filterable` (allowlist of root fields), `defaultLimit` (50), `maxLimit` (100), `maxSort`, `populate` (paths a client may populate).
 
@@ -183,6 +184,50 @@ app.register(Crudify, {
 - **update:** root keys of the scope can't be rewritten, so a document can never be moved out of its scope. If your scope uses `$or`, list the involved fields in `fields.readonly`.
 - `scope` must return a plain object. Anything else is a `403` (fail closed). Return `{}` to say "no restriction" explicitly, or pass `scope: false`.
 - `authorize` runs first, before any query. Use it for role checks that don't depend on the document; use `scope` for anything about *which* documents (it is atomic: no read-then-check race).
+
+### Deriving a scope key in `beforeCreate` (`createScope`)
+
+Sometimes the client does not send the scope key because it is *derived*: an order carries `tableIds`, and its `restaurantId` comes from those tables. By default (`createScope: 'strict'`, the behaviour of 3.0.0) Crudify demands the `{ $in }` key **before** `beforeCreate` runs, so such a resource answers `400 restaurantId is required`.
+
+With `createScope: 'after-hooks'` the create pipeline becomes:
+
+1. sanitize the client document (scope keys the client sent are kept, forced equality keys are dropped);
+2. run `beforeCreate(data, req)`, which can derive or stamp the key;
+3. **validate the final document**: every `{ $in }` key must exist (`400 <field> is required`) and be in the list (`403 Forbidden`);
+4. impose the equality keys last, so the hook cannot overwrite them.
+
+```js
+app.register(Crudify, {
+  url: '/orders',
+  Model: Order,
+  createScope: 'after-hooks',
+  scope: async (req) => ({
+    accountId: req.user.accountId,
+    restaurantId: { $in: await allowedRestaurantIds(req.user) } // e.g. from your permission system
+  }),
+  hooks: {
+    // `data` has no accountId yet: it is forced after this hook
+    beforeCreate: async (data) => {
+      const tables = await Table.find({ _id: { $in: data.tableIds ?? [] } }).lean()
+      const restaurants = new Set(tables.map(t => String(t.restaurantId)))
+      if (tables.length !== data.tableIds?.length || restaurants.size !== 1) {
+        throw new CrudifyError(400, 'tableIds must belong to a single restaurant')
+      }
+      return { ...data, restaurantId: [...restaurants][0] }
+    }
+  }
+})
+```
+
+What stays guaranteed: a hook can derive the key but **never move a document out of its scope**, because Crudify checks the result and forces the equality keys itself. Bulk requests are validated entirely before anything is written. `list`, `get`, `update` and `delete` are not affected.
+
+What you take on by choosing it:
+
+- `beforeCreate` receives the document **without the forced keys** (`accountId` above is not there yet). Don't rely on them inside the hook.
+- The hook must derive the key from trusted data (look it up in your database; never copy it from another client-supplied field without checking).
+- A hook that derives nothing is a `400`, and one that derives a value outside the caller's list is a `403`.
+
+Not recommended: setting `scope: {}` for the action and validating the tenant yourself inside `beforeCreate`. It works, but then nothing is checked by Crudify and a forgotten check is a cross-tenant leak; that risk is entirely yours.
 
 ## Hooks and request order
 
@@ -250,7 +295,7 @@ app.register(Crudify, {
 
 `ctx` has `Model`, `url`, `scope(req, action)`, `where(req, action, base)` (a filter with the scope applied), `load(req, action, id)` (a real Mongoose document, or 404), `list(req)` (sanitized + scoped paginate), `sanitize.{filter, options, update, create, query}`, `serialize`, `notFound` and `checkId`.
 
-> `additionalRoutes` (a function, or an array of `{ method, url, handler }`) still works but is deprecated and will be removed in 3.0. Use `routes` or `actions`.
+> `additionalRoutes` (deprecated in 2.x) was removed: passing it throws at registration. Use `routes` or `actions`.
 
 ## Recipes
 

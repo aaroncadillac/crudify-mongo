@@ -124,6 +124,9 @@ const normalizeOptions = (opts, log) => {
   const unknown = methods.find(m => !VERBS.includes(m))
   if (unknown) throw new TypeError(`Crudify: unknown method "${unknown}"`)
   if (methods.includes('list') && typeof Model.paginate !== 'function') throw new TypeError('Crudify: `list` needs mongoose-paginate-v2 (Model.paginate)')
+  if (opts.additionalRoutes !== undefined) throw new TypeError('Crudify: `additionalRoutes` was removed, use `routes(api, ctx)` or `actions`')
+  const createScope = opts.createScope === undefined ? 'strict' : opts.createScope
+  if (createScope !== 'strict' && createScope !== 'after-hooks') throw new TypeError('Crudify: `createScope` must be "strict" or "after-hooks"')
   const hooks = opts.hooks ?? {}
   for (const [name, fn] of Object.entries({ scope, authorize, serialize, mapError, ...hooks })) {
     if (fn !== undefined && fn !== false && typeof fn !== 'function') throw new TypeError(`Crudify: \`${name}\` must be a function`)
@@ -147,9 +150,9 @@ const normalizeOptions = (opts, log) => {
     : { ...compiled, ...(isPlainObject(opts.sanitizer) && opts.sanitizer) }
 
   return {
-    url, Model, methods, scope, authorize, serialize, mapError, hooks, bulk, san,
+    url, Model, methods, scope, authorize, serialize, mapError, hooks, bulk, san, lateScope: createScope === 'after-hooks',
     lean: !!opts.lean, select: opts.select, routeOptions: opts.routeOptions ?? {}, handlers: opts.handlers ?? {},
-    routes: opts.routes, actions: opts.actions ?? {}, additionalRoutes: opts.additionalRoutes,
+    routes: opts.routes, actions: opts.actions ?? {},
     idIsObjectId: Model.schema.path('_id')?.instance === 'ObjectId',
     schemas: buildSchemas({ JSONSchema: opts.JSONSchema, readonly: new Set(readonly), schema: opts.schema, bulk })
   }
@@ -193,15 +196,25 @@ const createHandlers = (c, ctx) => {
   const { Model, hooks } = c
   const { serialize } = ctx
 
-  const prepare = (item, rules) => {
-    const data = ctx.sanitize.create(item, rules.keys)
-    for (const field in rules.inLists) {
-      const v = item[field]
+  // Scope keys of a new document: `{ $in: [...] }` values must contain the document's own, equality values are forced.
+  const checkLists = (data, lists) => {
+    for (const field in lists) {
+      const v = data[field]
       if (v === undefined) throw new CrudifyError(400, `${field} is required`, { code: 'validation_error' })
-      if (!rules.inLists[field].some(x => String(x) === String(v))) throw forbidden()
-      data[field] = v
+      if (!lists[field].some(x => String(x) === String(v))) throw forbidden()
     }
-    return Object.assign(data, rules.forced)
+  }
+
+  // 'strict' checks the client's document before `beforeCreate`; 'after-hooks' lets the hook derive the keys and checks
+  // the FINAL document instead, forcing the equality keys last so a hook can never move a document out of its scope.
+  const prepare = async (item, req, rules) => {
+    const data = ctx.sanitize.create(item, rules.keys)
+    for (const field in rules.inLists) if (item[field] !== undefined) data[field] = item[field]
+    if (!c.lateScope) { checkLists(data, rules.inLists); Object.assign(data, rules.forced) }
+    const out = hooks.beforeCreate ? (await hooks.beforeCreate(data, req)) ?? data : data
+    if (!c.lateScope) return out
+    checkLists(out, rules.inLists)
+    return Object.assign(out, rules.forced)
   }
 
   return {
@@ -218,10 +231,7 @@ const createHandlers = (c, ctx) => {
       const rules = writeRules(req.crudify.filter)
       const isBulk = Array.isArray(req.body)
       const data = []
-      for (const item of isBulk ? req.body : [req.body]) {
-        const d = prepare(item, rules)
-        data.push(hooks.beforeCreate ? (await hooks.beforeCreate(d, req)) ?? d : d)
-      }
+      for (const item of isBulk ? req.body : [req.body]) data.push(await prepare(item, req, rules))
       let docs
       if (isBulk) { // validate everything first: an invalid item inserts nothing
         await Promise.all(data.map(d => Model.validate(d)))
@@ -261,8 +271,6 @@ const createHandlers = (c, ctx) => {
 }
 
 // ── The plugin ───────────────────────────────────────────────────────────────
-let deprecationShown = false
-
 async function Crudify (fastify, opts) {
   const c = normalizeOptions(opts, fastify.log)
   const ctx = createContext(c)
@@ -322,11 +330,6 @@ async function Crudify (fastify, opts) {
     route(method.toUpperCase(), path, { ...rest, action, load }, handler)
   }
 
-  if (c.additionalRoutes) { // deprecated, removed in 3.0
-    if (!deprecationShown) { deprecationShown = true; fastify.log.warn('Crudify: `additionalRoutes` is deprecated, use `routes` or `actions`') }
-    if (typeof c.additionalRoutes === 'function') c.additionalRoutes(fastify, opts)
-    else for (const { method = 'GET', url, handler, ...rest } of c.additionalRoutes) route(method.toUpperCase(), url, rest, handler)
-  }
 }
 
 Crudify[Symbol.for('plugin-meta')] = { name: 'crudify-mongo', fastify: '4.x || 5.x' }
