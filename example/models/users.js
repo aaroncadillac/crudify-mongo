@@ -1,37 +1,15 @@
-import mongoose from 'mongoose';
-import paginate from 'mongoose-paginate-v2';
+import mongoose from 'mongoose'
+import paginate from 'mongoose-paginate-v2'
 
-const Schema = mongoose.Schema;
+const userSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  accountId: { type: String, required: true, index: true },
+  passwordHash: { type: String, select: false } // select:false: never returned, filtered or sorted by the client
+}, { timestamps: true })
 
-const userSchema = new Schema({
-  name: {
-    type: String,
-    required: true
-  },
-  lastName: {
-    type: String,
-    required: true
-  },
-  email: {
-    type: String,
-    required: true
-  },
-  username: {
-    type: String,
-    required: true
-  },
-  phone: {
-    type: String,
-    required: true
-  }
-}, {
-  timestamps: true
-});
+userSchema.plugin(paginate)
 
-userSchema.plugin(paginate);
+const UserModel = mongoose.models.Users ?? mongoose.model('Users', userSchema)
 
-const UserModel = mongoose.model('Users', userSchema);
-
-export {
-  UserModel
-}
+export { UserModel }

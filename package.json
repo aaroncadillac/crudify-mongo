@@ -1,12 +1,34 @@
 {
   "name": "@aaroncadillac/crudify-mongo",
-  "version": "1.8.2",
-  "description": "An automatic CRUD generator for fastify",
-  "main": "crudify.js",
+  "version": "2.0.0",
+  "description": "A secure-by-default CRUD generator for Fastify and Mongoose, with hooks, scoping and a built-in query sanitizer",
+  "keywords": [
+    "fastify",
+    "mongoose",
+    "mongodb",
+    "crud",
+    "rest",
+    "sanitizer",
+    "plugin"
+  ],
+  "main": "./crudify.js",
+  "exports": {
+    ".": "./crudify.js",
+    "./sanitizer": "./sanitizer.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "crudify.js",
+    "sanitizer.js",
+    "CHANGELOG.md"
+  ],
   "repository": "git@github.com:aaroncadillac/crudify-mongo.git",
   "author": "aaroncadillac",
   "scripts": {
-    "test": "yarn node --experimental-vm-modules $(yarn bin jest)"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects unit",
+    "test:local": "MONGOMS_SYSTEM_BINARY=$(command -v mongod) node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "bench": "node bench/run.js"
   },
   "license": "MPL-2.0",
   "type": "module",
@@ -14,12 +36,29 @@
   "publishConfig": {
     "access": "public"
   },
+  "engines": {
+    "node": ">=20"
+  },
+  "resolutions": {
+    "fastify/light-my-request/cookie": "^1.1.1"
+  },
+  "peerDependencies": {
+    "fastify": "^4.0.0 || ^5.0.0",
+    "mongoose": "^8.0.0",
+    "mongoose-paginate-v2": "^1.8.0"
+  },
+  "peerDependenciesMeta": {
+    "mongoose-paginate-v2": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@fastify/auth": "^5.0.0",
     "@shelf/jest-mongodb": "^4.3.2",
-    "fastify": "^4.28.1",
+    "fastify": "^5.0.0",
+    "fastify4": "npm:fastify@^4.29.0",
     "jest": "^29.7.0",
-    "mongoose": "^8.5.1",
-    "mongoose-paginate-v2": "^1.8.2",
-    "supertest": "^7.0.0"
+    "mongoose": "^8.17.0",
+    "mongoose-paginate-v2": "^1.8.2"
   }
 }

@@ -1,15 +1,10 @@
-import mongoose from 'mongoose';
+import mongoose from 'mongoose'
 
-const dbConnection = async ( fastify ) => {
-  try {
-    await mongoose.connect(`${process.env.MONGODB_URL}/${process.env.MONGO_DATABASE}${process.env.MONGO_OPTIONS && `?${process.env.MONGO_OPTIONS}`}`);
-    fastify.log.info('Connected to database');
-  }
-  catch (error) {
-    fastify.log.error('Error connecting to database');
-  }
+// MONGODB_URL is the full connection string, e.g. mongodb://localhost:27017/crudify-example
+const dbConnection = async (fastify) => {
+  await mongoose.connect(process.env.MONGODB_URL)
+  fastify.log.info('Connected to database')
+  fastify.addHook('onClose', () => mongoose.disconnect())
 }
 
-export {
-  dbConnection
-}
+export { dbConnection }
