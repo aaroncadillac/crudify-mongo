@@ -2,6 +2,8 @@
 
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-blue.svg)](https://opensource.org/licenses/MPL-2.0)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/aaroncadillac/crudify-mongo/test.yml)
+![Node](https://img.shields.io/node/v/%40aaroncadillac%2Fcrudify-mongo)
+![Recommended: Node 22 LTS](https://img.shields.io/badge/recommended-Node%2022%20LTS-339933?logo=node.js&logoColor=white)
 ![NPM Version](https://img.shields.io/npm/v/%40aaroncadillac%2Fcrudify-mongo)
 
 A CRUD generator for [Fastify](https://fastify.dev) and [Mongoose](https://mongoosejs.com) that is **safe to expose by default**: client queries are sanitized, results are bounded, errors never leak internals, and every read and write can be pinned to a server-side scope. It is small (two files, no runtime dependencies) and extensible through hooks and custom routes.
@@ -29,7 +31,7 @@ A CRUD generator for [Fastify](https://fastify.dev) and [Mongoose](https://mongo
 yarn add @aaroncadillac/crudify-mongo
 ```
 
-Requires Node >= 22, Fastify 4 or 5, Mongoose 8 and, for the list route, [mongoose-paginate-v2](https://www.npmjs.com/package/mongoose-paginate-v2) >= 1.8. They are peer dependencies: Crudify imports none of them.
+Requires Node >= 20 (Node 22, the current LTS, is recommended), Fastify 4 or 5, Mongoose 8 and, for the list route, [mongoose-paginate-v2](https://www.npmjs.com/package/mongoose-paginate-v2) >= 1.8. They are peer dependencies: Crudify imports none of them.
 
 ## Quick start
 
