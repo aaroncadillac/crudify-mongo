@@ -2,7 +2,28 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.0.0] - 2026-10-21
+## [Unreleased]
+
+### ⚠ BREAKING
+
+- **`additionalRoutes` was removed** (deprecated since the 2.x line, both the function and the array form). Passing it now throws a `TypeError` at registration pointing to the replacement. Migrate to `routes(api, ctx)` or `actions`. Because this is a breaking change on top of the published 3.0.0, the next release that includes it must be a **major** version.
+
+## [3.1.0] - 2026-10-22
+
+### Added
+
+- **`createScope: 'strict' | 'after-hooks'`** (default `'strict'`, exactly the 3.0.0 behaviour). With `'after-hooks'`, `beforeCreate` can derive a scope key the client does not send (for example an order's `restaurantId` from its `tableIds`): the key is no longer demanded before the hook, the **final document** is validated afterwards (`400 <field> is required` when missing, `403` when outside the scope's `{ $in }` list) and the equality keys are forced last. Bulk requests are validated entirely before anything is inserted. Invalid values throw at registration. See "Deriving a scope key" in the README.
+
+### Security
+
+- The document that reaches Mongo is always checked against the scope on create, in both modes. In `'after-hooks'` a hook can derive a key but cannot move a document out of its scope, nor overwrite a forced key.
+
+### Notes
+
+- In `'after-hooks'` mode `beforeCreate` receives the document without the forced equality keys (they are applied after the hook); in `'strict'` mode it still receives them, as in 3.0.0.
+- Publishing: the release workflow bumps the version from the commit message, so use `[minor]` for this release.
+
+## [3.0.0] - 2026-10-21
 
 Crudify is now **secure by default** and extensible. The plugin that used to hand raw client input to Mongo (and made every real application re-implement it) now sanitizes queries and bodies, bounds results, hides internals from error responses and offers `scope` / `authorize` / hooks / custom routes as first-class seams. It stays small: two files, no runtime dependencies. It does **not** authenticate or authorize by itself; it gives you the points where your tool of choice (`@fastify/auth`, Casbin, JWT...) plugs in.
 
@@ -38,7 +59,7 @@ Crudify is now **secure by default** and extensible. The plugin that used to han
 
 ### Deprecated
 
-- `additionalRoutes` (both the function form and the array form the old README described). Use `routes` or `actions`. It still works and logs a warning; it will be removed in 3.0.
+- `additionalRoutes` (both the function form and the array form the old README described). Use `routes` or `actions`. It still works and logs a warning; it will be removed in 4.0.
 
 ### Fixed
 
@@ -88,9 +109,9 @@ Each audited problem has a test; the suites live in `test/unit` (model stubbed, 
 
 Needs of the first real consumer (a multi-tenant restaurant API) are covered too: tenant isolation, authorize by verb, operator allowlist, limits, writable / readonly fields, tenant forcing on create, `methods`, consistent errors, bulk, custom routes and actions with shared scope (`integration` "custom routes and actions share scope + authorize").
 
-## Migration guide: 1.x → 2.0
+## Migration guide: 1.x → 3.0
 
-| In 1.x | In 2.0 | If you need the old behaviour |
+| In 1.x | In 3.0 | If you need the old behaviour |
 |---|---|---|
 | `GET /` returned everything | 50 per page, max 100 | `query: { defaultLimit, maxLimit }`; there is no "all rows" mode, page through the results |
 | Any Mongo operator in `filters` | Allowlisted operators | `query: { operators: [...DEFAULT_OPERATORS, '$size', '$all', '$nor'] }`, or `sanitizer: false` (not recommended) |

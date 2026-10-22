@@ -24,6 +24,20 @@ schema.pre('findOneAndUpdate', function () { counters.update++ })
 schema.pre('findOneAndDelete', function () { counters.remove++ })
 const Item = mongoose.model('Item', schema)
 
+
+// Orders carry no restaurantId from the client: it is derived from their tables (createScope: 'after-hooks').
+const tableSchema = new mongoose.Schema({ restaurantId: String })
+const orderSchema = new mongoose.Schema({
+  name: String,
+  tableIds: [String],
+  restaurantId: String,
+  accountId: String
+}, { timestamps: true })
+orderSchema.plugin(paginate)
+orderSchema.pre('save', function () { counters.save++ })
+const Table = mongoose.model('TableLookup', tableSchema)
+const Order = mongoose.model('OrderDerived', orderSchema)
+
 const tenant = (id) => ({ 'x-tenant': id })
 const base = {
   url: '/items',
@@ -35,10 +49,12 @@ const base = {
 beforeAll(async () => {
   await mongoose.connect(global.__MONGO_URI__, { dbName: global.__MONGO_DB_NAME__ })
   await Item.init()
+  await Order.init()
 })
 afterAll(async () => { await mongoose.disconnect() })
 beforeEach(async () => {
   await Item.deleteMany({})
+  await Promise.all([Table.deleteMany({}), Order.deleteMany({})])
   Object.assign(counters, { save: 0, update: 0, remove: 0 })
 })
 
@@ -365,13 +381,8 @@ describe.each(FASTIFIES)('%s · Crudify (real Mongo)', (_, Fastify) => {
       expect((await req({ url: '/items' })).statusCode).toBe(401)
     })
 
-    it('additionalRoutes works in both legacy forms', async () => {
-      const { req } = await serve({
-        additionalRoutes: [{ method: 'GET', url: '/legacy-array', handler: async () => ({ form: 'array' }) }]
-      })
-      expect((await req({ url: '/items/legacy-array', headers: tenant('A') })).json()).toEqual({ form: 'array' })
-      const second = await serve({ additionalRoutes: (fastify, opts) => fastify.get(`${opts.url}/legacy-fn`, async () => ({ form: 'fn' })) })
-      expect((await second.req({ url: '/items/legacy-fn' })).json()).toEqual({ form: 'fn' })
+    it('additionalRoutes was removed: registration fails with a pointer to routes/actions', async () => {
+      await expect(serve({ additionalRoutes: [{ method: 'GET', url: '/legacy', handler: async () => ({}) }] })).rejects.toThrow(/additionalRoutes.*removed/)
     })
   })
 
@@ -403,6 +414,85 @@ describe.each(FASTIFIES)('%s · Crudify (real Mongo)', (_, Fastify) => {
       expect((await req({ method: 'POST', url: '/items', payload: { age: 1 }, headers: h })).statusCode).toBe(400)
       expect((await req({ method: 'POST', url: '/items', payload: [{ name: 'd' }, { age: 1 }], headers: h })).statusCode).toBe(400)
       expect(await Item.countDocuments({})).toBe(3)
+    })
+  })
+
+  describe('createScope: "after-hooks" (derived tenant key)', () => {
+    const caller = (restaurants, account = 'A') => ({ 'x-tenant': account, 'x-restaurants': restaurants })
+    const h = caller('R1,R2')
+    const orders = {
+      url: '/orders',
+      Model: Order,
+      createScope: 'after-hooks',
+      authorize: () => {},
+      scope: (req) => ({ accountId: req.headers['x-tenant'], restaurantId: { $in: req.headers['x-restaurants'].split(',') } }),
+      hooks: {
+        beforeCreate: async (data) => {
+          const tables = await Table.find({ _id: { $in: data.tableIds ?? [] } }).lean()
+          return { ...data, restaurantId: tables[0]?.restaurantId }
+        }
+      }
+    }
+    let t1, t2, t9
+    beforeEach(async () => {
+      ;[t1, t2, t9] = (await Table.create([{ restaurantId: 'R1' }, { restaurantId: 'R2' }, { restaurantId: 'R9' }])).map(t => String(t._id))
+    })
+
+    it('derives the key in the hook, validates the final document, and the save hooks run', async () => {
+      const { req } = await serve(orders)
+      const res = await req({ method: 'POST', url: '/orders', payload: { name: 'o', tableIds: [t1], accountId: 'EVIL' }, headers: h })
+      expect(res.statusCode).toBe(201)
+      expect(res.json()).toMatchObject({ restaurantId: 'R1', accountId: 'A' })
+      expect(counters.save).toBe(1)
+      expect(await Order.countDocuments({ restaurantId: 'R1', accountId: 'A' })).toBe(1)
+    })
+
+    it('a table of a restaurant outside the caller\'s list is 403 and nothing is stored', async () => {
+      const { req } = await serve(orders)
+      const res = await req({ method: 'POST', url: '/orders', payload: { name: 'o', tableIds: [t9] }, headers: h })
+      expect(res.statusCode).toBe(403)
+      expect(await Order.countDocuments({})).toBe(0)
+    })
+
+    it('a hook that derives nothing is 400', async () => {
+      const { req } = await serve(orders)
+      const res = await req({ method: 'POST', url: '/orders', payload: { name: 'o', tableIds: [] }, headers: h })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().message).toBe('restaurantId is required')
+    })
+
+    it('a hook cannot overwrite a forced key: the scope value is stored', async () => {
+      const { req } = await serve({ ...orders, hooks: { beforeCreate: async (d) => ({ ...await orders.hooks.beforeCreate(d), accountId: 'EVIL' }) } })
+      const res = await req({ method: 'POST', url: '/orders', payload: { name: 'o', tableIds: [t2] }, headers: h })
+      expect(res.json()).toMatchObject({ restaurantId: 'R2', accountId: 'A' })
+    })
+
+    it('bulk: one item outside the list inserts nothing', async () => {
+      const { req } = await serve(orders)
+      const bad = await req({ method: 'POST', url: '/orders', payload: [{ name: 'a', tableIds: [t1] }, { name: 'b', tableIds: [t9] }], headers: h })
+      expect(bad.statusCode).toBe(403)
+      expect(await Order.countDocuments({})).toBe(0)
+      const ok = await req({ method: 'POST', url: '/orders', payload: [{ name: 'a', tableIds: [t1] }, { name: 'b', tableIds: [t2] }], headers: h })
+      expect(ok.statusCode).toBe(201)
+      expect(await Order.countDocuments({})).toBe(2)
+    })
+
+    it('the stored document stays isolated: other restaurants / tenants get a plain 404', async () => {
+      const { req } = await serve(orders)
+      const { _id } = (await req({ method: 'POST', url: '/orders', payload: { name: 'o', tableIds: [t1] }, headers: h })).json()
+      expect((await req({ url: `/orders/${_id}`, headers: caller('R1') })).statusCode).toBe(200)
+      expect((await req({ url: `/orders/${_id}`, headers: caller('R2') })).statusCode).toBe(404)
+      expect((await req({ url: `/orders/${_id}`, headers: caller('R1', 'B') })).statusCode).toBe(404)
+      const moved = await req({ method: 'PUT', url: `/orders/${_id}`, payload: { name: 'p', restaurantId: 'R2', accountId: 'B' }, headers: caller('R1') })
+      expect(moved.json()).toMatchObject({ name: 'p', restaurantId: 'R1', accountId: 'A' })
+    })
+
+    it('the default "strict" mode still demands the key before the hook runs', async () => {
+      const { req } = await serve({ ...orders, createScope: undefined })
+      const res = await req({ method: 'POST', url: '/orders', payload: { name: 'o', tableIds: [t1] }, headers: h })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().message).toBe('restaurantId is required')
+      expect(await Order.countDocuments({})).toBe(0)
     })
   })
 })

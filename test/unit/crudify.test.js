@@ -25,6 +25,15 @@ const stamped = new mongoose.Schema({ name: String }, { timestamps: { createdAt:
 stamped.plugin(paginate)
 const Stamped = mongoose.model('Stamped', stamped)
 
+const placed = new mongoose.Schema({
+  name: String,
+  tableIds: [String],
+  restaurantId: String,
+  accountId: String
+}, { timestamps: true })
+placed.plugin(paginate)
+const Placed = mongoose.model('Placed', placed)
+
 const stubModel = (Model = Thing) => ({
   paginate: jest.spyOn(Model, 'paginate').mockResolvedValue({ docs: [doc], totalDocs: 1, limit: 50, page: 1 }),
   findOne: jest.spyOn(Model, 'findOne').mockResolvedValue(doc),
@@ -505,21 +514,10 @@ describe.each(FASTIFIES)('%s · Crudify (stubbed model)', (_, Fastify) => {
       expect(snapshot).toEqual({ action: 'list', filter: { accountId: 'A' } })
     })
 
-    it('still supports additionalRoutes (array and function forms) with one deprecation warning', async () => {
-      const warns = []
+    it('rejects the removed additionalRoutes option at registration (both old forms)', async () => {
       stubModel()
-      const first = await serve(Fastify, {
-        additionalRoutes: [{ method: 'GET', url: '/ping', handler: async () => ({ pong: 1 }) }]
-      }, { fastifyOptions: { logger: { level: 'warn', stream: { write: (l) => warns.push(l) } } } })
-      expect((await first.req({ url: '/things/ping' })).json()).toEqual({ pong: 1 })
-      await first.close()
-      const second = await serve(Fastify, {
-        additionalRoutes: (fastify, opts) => fastify.get(`${opts.url}/legacy`, async () => ({ legacy: true }))
-      }, { fastifyOptions: { logger: { level: 'warn', stream: { write: (l) => warns.push(l) } } } })
-      expect((await second.req({ url: '/things/legacy' })).json()).toEqual({ legacy: true })
-      await second.close()
-      // shown once per process: at most one of the two registrations (none if an earlier test already showed it)
-      expect(warns.filter(w => w.includes('additionalRoutes` is deprecated')).length).toBeLessThanOrEqual(1)
+      await expect(serve(Fastify, { additionalRoutes: [{ method: 'GET', url: '/ping', handler: async () => ({}) }] })).rejects.toThrow(/additionalRoutes.*removed/)
+      await expect(serve(Fastify, { additionalRoutes: () => {} })).rejects.toThrow(/routes|actions/)
     })
   })
 
@@ -657,6 +655,140 @@ describe.each(FASTIFIES)('%s · Crudify (stubbed model)', (_, Fastify) => {
       expect(m.paginate.mock.calls[0][1].limit).toBe(3)
     })
   })
+
+  // createScope: where the scope's `$in` keys are checked on create (new in 3.1.0)
+  describe('createScope', () => {
+    const TABLE_RESTAURANT = { t1: 'R1', t2: 'R2', t3: 'R9' } // R9 is not in the caller's list
+    const scope = () => ({ restaurantId: { $in: ['R1', 'R2'] }, accountId: 'A' })
+    const derive = (data) => ({ ...data, restaurantId: TABLE_RESTAURANT[data.tableIds?.[0]] })
+    const post = (req, payload) => req({ method: 'POST', url: '/placed', payload })
+    const start$ = (opts) => start({ url: '/placed', Model: Placed, scope, ...opts }, { Model: Placed })
+
+    it('"strict" (the default) demands the key BEFORE beforeCreate, and the hook sees the forced keys', async () => {
+      const m = stubModel(Placed)
+      const seen = []
+      const { req } = await start$({ hooks: { beforeCreate: (d) => { seen.push({ ...d }); return d } } })
+      const res = await post(req, { name: 'x', tableIds: ['t1'] })
+      expect(res.statusCode).toBe(400)
+      expect(res.json()).toMatchObject({ message: 'restaurantId is required', code: 'validation_error' })
+      expect(seen).toHaveLength(0)
+      expect(m.create).not.toHaveBeenCalled()
+
+      expect((await post(req, { name: 'x', restaurantId: 'R1' })).statusCode).toBe(201)
+      expect(seen[0]).toMatchObject({ restaurantId: 'R1', accountId: 'A' })
+    })
+
+    it('"strict" is the same when named explicitly', async () => {
+      stubModel(Placed)
+      const hook = jest.fn((d) => d)
+      const { req } = await start$({ createScope: 'strict', hooks: { beforeCreate: hook } })
+      expect((await post(req, { name: 'x' })).statusCode).toBe(400)
+      expect(hook).not.toHaveBeenCalled()
+    })
+
+    it('"after-hooks" lets beforeCreate derive the key, then forces the equality keys', async () => {
+      const m = stubModel(Placed)
+      const { req } = await start$({ createScope: 'after-hooks', hooks: { beforeCreate: derive } })
+      const res = await post(req, { name: 'x', tableIds: ['t2'] })
+      expect(res.statusCode).toBe(201)
+      expect(m.create).toHaveBeenCalledWith({ name: 'x', tableIds: ['t2'], restaurantId: 'R2', accountId: 'A' })
+    })
+
+    it('the document handed to the hook has no forced keys yet (documented)', async () => {
+      stubModel(Placed)
+      const seen = []
+      const { req } = await start$({ createScope: 'after-hooks', hooks: { beforeCreate: (d) => { seen.push({ ...d }); return derive(d) } } })
+      await post(req, { name: 'x', tableIds: ['t1'], accountId: 'EVIL' })
+      expect(seen[0]).toEqual({ name: 'x', tableIds: ['t1'] })
+    })
+
+    it('a key the client sent is visible to the hook and accepted when it is in the list', async () => {
+      const m = stubModel(Placed)
+      const seen = []
+      const { req } = await start$({ createScope: 'after-hooks', hooks: { beforeCreate: (d) => { seen.push({ ...d }); return d } } })
+      expect((await post(req, { name: 'x', restaurantId: 'R2' })).statusCode).toBe(201)
+      expect(seen[0].restaurantId).toBe('R2')
+      expect(m.create).toHaveBeenCalledWith({ name: 'x', restaurantId: 'R2', accountId: 'A' })
+    })
+
+    it('a derived key outside the list is 403 and nothing is written', async () => {
+      const m = stubModel(Placed)
+      const { req } = await start$({ createScope: 'after-hooks', hooks: { beforeCreate: derive } })
+      const res = await post(req, { name: 'x', tableIds: ['t3'] })
+      expect(res.statusCode).toBe(403)
+      expect(res.json().message).toBe('Forbidden')
+      expect(m.create).not.toHaveBeenCalled()
+    })
+
+    it('a hook that moves a client-sent key out of the list is 403', async () => {
+      const m = stubModel(Placed)
+      const { req } = await start$({ createScope: 'after-hooks', hooks: { beforeCreate: (d) => ({ ...d, restaurantId: 'R9' }) } })
+      expect((await post(req, { name: 'x', restaurantId: 'R1' })).statusCode).toBe(403)
+      expect(m.create).not.toHaveBeenCalled()
+    })
+
+    it('without a derived key it is 400, with or without a hook', async () => {
+      const m = stubModel(Placed)
+      const withHook = await start$({ createScope: 'after-hooks', hooks: { beforeCreate: (d) => d } })
+      const res = await post(withHook.req, { name: 'x' })
+      expect(res.statusCode).toBe(400)
+      expect(res.json()).toMatchObject({ message: 'restaurantId is required', code: 'validation_error' })
+      await withHook.app.close()
+
+      const noHook = await start$({ createScope: 'after-hooks' })
+      expect((await post(noHook.req, { name: 'x' })).statusCode).toBe(400)
+      expect(m.create).not.toHaveBeenCalled()
+    })
+
+    it('a hook cannot overwrite a forced key: the scope value wins', async () => {
+      const m = stubModel(Placed)
+      const { req } = await start$({ createScope: 'after-hooks', hooks: { beforeCreate: (d) => ({ ...derive(d), accountId: 'EVIL' }) } })
+      expect((await post(req, { name: 'x', tableIds: ['t1'] })).statusCode).toBe(201)
+      expect(m.create.mock.calls[0][0].accountId).toBe('A')
+    })
+
+    it('a hook that returns nothing keeps the sanitized document (same as today)', async () => {
+      const m = stubModel(Placed)
+      const { req } = await start$({ createScope: 'after-hooks', hooks: { beforeCreate: () => {} } })
+      expect((await post(req, { name: 'x', restaurantId: 'R1' })).statusCode).toBe(201)
+      expect(m.create).toHaveBeenCalledWith({ name: 'x', restaurantId: 'R1', accountId: 'A' })
+    })
+
+    it('bulk: every item is checked before anything is written', async () => {
+      const m = stubModel(Placed)
+      const { req } = await start$({ createScope: 'after-hooks', hooks: { beforeCreate: derive } })
+      const res = await post(req, [{ name: 'a', tableIds: ['t1'] }, { name: 'b', tableIds: ['t3'] }])
+      expect(res.statusCode).toBe(403)
+      expect(m.create).not.toHaveBeenCalled()
+      expect(m.insertMany).not.toHaveBeenCalled()
+
+      const ok = await post(req, [{ name: 'a', tableIds: ['t1'] }, { name: 'b', tableIds: ['t2'] }])
+      expect(ok.statusCode).toBe(201)
+      expect(m.create).toHaveBeenCalledWith([
+        expect.objectContaining({ restaurantId: 'R1', accountId: 'A' }),
+        expect.objectContaining({ restaurantId: 'R2', accountId: 'A' })
+      ])
+    })
+
+    it('list, get, update and delete are untouched by the option', async () => {
+      const m = stubModel(Placed)
+      const { req } = await start$({ createScope: 'after-hooks', hooks: { beforeCreate: derive } })
+      await req({ url: '/placed' })
+      await req({ url: `/placed/${ID}` })
+      await req({ method: 'PUT', url: `/placed/${ID}`, payload: { name: 'y', restaurantId: 'R2', accountId: 'EVIL' } })
+      await req({ method: 'DELETE', url: `/placed/${ID}` })
+      const filter = { restaurantId: { $in: ['R1', 'R2'] }, accountId: 'A' }
+      expect(m.paginate.mock.calls[0][0]).toEqual(filter)
+      expect(m.findOne.mock.calls[0][0]).toEqual({ _id: ID, ...filter })
+      expect(m.update.mock.calls[0][0]).toEqual({ _id: ID, ...filter })
+      expect(m.update.mock.calls[0][1]).toEqual({ name: 'y' }) // scope keys are still dropped from updates
+      expect(m.remove.mock.calls[0][0]).toEqual({ _id: ID, ...filter })
+    })
+
+    it.each([['later'], [true], [null], [1]])('refuses an invalid value (%p) when registering', async (value) => {
+      await expect(serve(Fastify, { url: '/placed', Model: Placed, createScope: value })).rejects.toThrow(/createScope/)
+    })
+  })
 })
 
 describe('package contract', () => {
@@ -666,7 +798,7 @@ describe('package contract', () => {
     expect(pkg.exports['.']).toBe('./crudify.js')
     expect(pkg.exports['./sanitizer']).toBe('./sanitizer.js')
     for (const file of pkg.files.filter(f => f.endsWith('.js'))) expect(existsSync(new URL(`../../${file}`, import.meta.url))).toBe(true)
-    expect(pkg.version).toBe('2.0.0')
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/) // the publish action bumps it; never pin it
     expect(pkg.engines.node).toBe('>=20')
   })
 

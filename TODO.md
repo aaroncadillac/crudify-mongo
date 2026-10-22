@@ -1,6 +1,6 @@
 # TODO — Crudify v2: ligero, seguro por defecto y extensible
 
-> **Estado (2026-10-21): implementado en 2.0.0** (sin publicar). Las casillas marcadas están hechas y probadas; lo pendiente está en §8. Detalle de cambios y mapa C→test en `CHANGELOG.md`.
+> **Estado (2026-10-22): 2.0.0 se publicó como 3.0.0 (la versión la sube el action de publicación) y `createScope` queda listo para 3.1.0 (sin publicar).** Las casillas marcadas están hechas y probadas; lo pendiente está en §8. Detalle de cambios y mapa C→test en `CHANGELOG.md`.
 
 Origen: Igor dejó de usar `@aaroncadillac/crudify-mongo` el 2026-10-21. Se reemplazó por un `ScopedCrud` propio (`igor-server/src/plugins/scopedCrud.js`, `tenancy/resourceScopes.js`, `utils/querySanitizer.js`) porque Crudify 1.8.2 no daba forma de cerrar fugas entre tenants ni de personalizar endpoints sin escribir controladores aparte. Este documento baja ese aprendizaje al plugin. Análisis hecho sobre `crudify.js` (213 líneas, idéntico a lo publicado) y el uso real en Igor (~35 recursos registrados).
 
@@ -150,8 +150,16 @@ El problema: para cualquier comportamiento distinto al CRUD plano hubo que escri
 - [ ] **Tipos `.d.ts`** (opciones, hooks, `ctx`, `CrudifyError`): un tercer archivo; propuesto para 2.1.
 - [ ] **`query.maxPage`** (un `page` enorme produce un `skip` caro) y paginación por cursor.
 - [ ] **Migrar Igor a Crudify 2.0** como validación real: reemplazar `scopedCrud.js`, `resourceScopes.js` y `querySanitizer.js` por configuración y correr sus 154 tests y los casos de `todo.md`. Diferencias a tener en cuenta: Igor usaba `limit` 1000 en catálogos (`query.maxLimit`), mensajes de hooks de modelo visibles al cliente (ahora `CrudifyError` o `mapError`), `bulk` máximo 100, y la forma del 409 (`code: 'duplicate_key'`, mensaje en inglés).
-- [ ] Quitar `additionalRoutes` en 3.0.
+- [x] Quitar `additionalRoutes` (registrarlo ahora lanza un TypeError con la ruta de migración). Rompe compatibilidad: requiere versión mayor.
 - [ ] Mongoose 9 queda fuera (peer `^8`).
 - [ ] Bulk no transaccional: un E11000 a mitad del lote deja inserciones parciales (igual que en 1.x). Documentar o usar transacciones en una versión futura.
 - [ ] `lean: true` por recurso no ejecuta getters, virtuals ni transforms de `toJSON`; revisar antes de activarlo donde esos transforms oculten secretos.
 - [ ] Corrección al análisis original: C15 decía que sin `fastify-plugin` se perdía la herencia de hooks; no es así (C25). Un plugin encapsulado hereda los hooks y decoradores del padre.
+
+## 9. 3.1.0 — `createScope` (derivar la llave del scope en `beforeCreate`)
+
+- [x] Opción `createScope: 'strict' | 'after-hooks'` (default `'strict'` = 3.0.0). En `'after-hooks'`: sanitizar → `beforeCreate` → validar el documento FINAL contra el scope (`400` si falta la llave `$in`, `403` si está fuera de la lista) → imponer las llaves de igualdad al final. Bulk validado completo antes de insertar. _(Origen: Orders de Igor deriva `restaurantId` de `tableIds`.)_
+- [x] Tests unitarios (stubs) e integración (Mongo real) en Fastify 4 y 5; README ("Deriving a scope key") y CHANGELOG.
+- [ ] Publicar 3.1.0: usar `[minor]` en el mensaje del commit a `master` (el action sube la versión según ese tag).
+- [x] Discrepancia de `engines` resuelta: `>=20` en package.json, test y CHANGELOG, igual que lo publicado (CI usa Node 22 para correr, que es válido).
+
