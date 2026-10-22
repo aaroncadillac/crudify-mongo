@@ -798,7 +798,7 @@ describe('package contract', () => {
     expect(pkg.exports['.']).toBe('./crudify.js')
     expect(pkg.exports['./sanitizer']).toBe('./sanitizer.js')
     for (const file of pkg.files.filter(f => f.endsWith('.js'))) expect(existsSync(new URL(`../../${file}`, import.meta.url))).toBe(true)
-    expect(pkg.version).toBe('2.0.0')
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/) // the publish action bumps it; never pin it
     expect(pkg.engines.node).toBe('>=20')
   })
 
