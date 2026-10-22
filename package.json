@@ -37,7 +37,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   },
   "resolutions": {
     "fastify/light-my-request/cookie": "^1.1.1"

@@ -667,7 +667,7 @@ describe('package contract', () => {
     expect(pkg.exports['./sanitizer']).toBe('./sanitizer.js')
     for (const file of pkg.files.filter(f => f.endsWith('.js'))) expect(existsSync(new URL(`../../${file}`, import.meta.url))).toBe(true)
     expect(pkg.version).toBe('2.0.0')
-    expect(pkg.engines.node).toBe('>=22')
+    expect(pkg.engines.node).toBe('>=20')
   })
 
   it('has no runtime dependencies (fastify, mongoose and paginate are peers)', () => {

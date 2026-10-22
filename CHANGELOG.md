@@ -14,7 +14,7 @@ Crudify is now **secure by default** and extensible. The plugin that used to han
 - **Error responses changed.** One shape for every error: `{ status, error, message, code? }` (the 404 body is unchanged). Validation and cast errors are `400` everywhere (a cast error or a non-`required` validation error on `PUT` was a `500`), duplicate keys are a generic `409`, and every unexpected error is `500 Internal error`: `err.message` is no longer sent to clients.
 - **`POST` with an array** goes through `Model.create` (so `pre/post('save')` hooks run), validates every item before inserting any, and is limited to `bulk.max` (default 100, `413` above it). The old `insertMany` behaviour is available with `bulk: { insertMany: true }`.
 - **`opts.schema`** is now per verb: `{ list, get, create, update, delete }`, and it is merged over the generated schemas instead of replacing them.
-- **`exports` map.** The package exposes `.` and `./sanitizer`; deep imports such as `.../crudify.js` no longer resolve. `engines.node` is `>=22`; `fastify` (^4 or ^5), `mongoose` (^8) and `mongoose-paginate-v2` are peer dependencies.
+- **`exports` map.** The package exposes `.` and `./sanitizer`; deep imports such as `.../crudify.js` no longer resolve. `engines.node` is `>=20`; `fastify` (^4 or ^5), `mongoose` (^8) and `mongoose-paginate-v2` are peer dependencies.
 - **The plugin is async** (no `next` callback). It still registers with `fastify.register(Crudify, options)`.
 
 ### Added
