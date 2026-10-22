@@ -1,30 +1,15 @@
-import mongoose from 'mongoose';
-import paginate from 'mongoose-paginate-v2';
+import mongoose from 'mongoose'
+import paginate from 'mongoose-paginate-v2'
 
-const Schema = mongoose.Schema;
+const postsSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  content: { type: String, required: true },
+  accountId: { type: String, required: true, index: true },
+  status: { type: String, enum: ['draft', 'published'], default: 'draft' }
+}, { timestamps: true })
 
-const postsSchema = new Schema({
-  title: {
-    type: String,
-    required: true
-  },
-  content: {
-    type: String,
-    required: true
-  },
-  author: {
-    type: Schema.Types.ObjectId,
-    ref: 'Users',
-    required: true
-  }
-}, {
-  timestamps: true,
-});
+postsSchema.plugin(paginate)
 
-postsSchema.plugin(paginate);
+const PostsModel = mongoose.models.Posts ?? mongoose.model('Posts', postsSchema)
 
-const PostsModel = mongoose.model('Users', postsSchema);
-
-export {
-  PostsModel
-}
+export { PostsModel }
