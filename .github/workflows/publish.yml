@@ -31,8 +31,6 @@ jobs:
         with:
           target-branch: master
           provenance: true
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         if: steps.run-action.outcome == 'success'
