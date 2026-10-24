@@ -20,15 +20,41 @@ jobs:
         with:
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false  # never use caching in release builds
       - name: Config git user & email
         run: |
           git config user.name "$(git log -n 1 --pretty=format:%an)"
           git config user.email "$(git log -n 1 --pretty=format:%ae)"
-      - name: Run my Action
+      - name: Publishing package
         id: run-action
-        uses: iuccio/npm-semver-publish-action@v1.0.0
-        with:
-          target-branch: master
-          provenance: true
+        run: |
+            npm publish
+
+      - name: Create GitHub Release
+        if: steps.run-action.outcome == 'success'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          PUBLISHED_VERSION: ${{ steps.run-action.outputs.version }}
+        run: |
+          VERSION="${PUBLISHED_VERSION:-$(node -p "require('./package.json').version")}"
+          TAG="v${VERSION#v}"
+
+          if ! git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "No tag ${TAG} on the remote, nothing to release."; exit 0
+          fi
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists."; exit 0
+          fi
+
+          PR=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" -q '.[0].number // empty')
+          BODY=""
+          if [ -n "${PR}" ]; then
+            BODY=$(gh pr view "${PR}" --json body -q .body | sed '/Generated with \[Claude Code\]/,$d')
+          fi
+
+          if [ -n "${BODY//[[:space:]]/}" ]; then
+            printf '%s\n\nPull request: #%s\n' "${BODY}" "${PR}" > release-notes.md
+            gh release create "${TAG}" --title "${TAG}" --notes-file release-notes.md --verify-tag --latest
+          else
+            gh release create "${TAG}" --title "${TAG}" --generate-notes --verify-tag --latest
+          fi

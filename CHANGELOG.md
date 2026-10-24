@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - **`additionalRoutes` was removed** (deprecated since the 2.x line, both the function and the array form). Passing it now throws a `TypeError` at registration pointing to the replacement. Migrate to `routes(api, ctx)` or `actions`. Because this is a breaking change on top of the published 3.0.0, the next release that includes it must be a **major** version.
 
+### Fixed
+
+- **Bulk `POST` ignored schema defaults when validating.** The array form validated each item with the static `Model.validate(data)`, which does not apply `default`s, so a bulk without a field that has a `default` (and is `required`, e.g. `status`) answered `400` while the same document sent alone worked. Each item is now built once with `new Model(data)`, validated with `doc.validate()` (defaults applied) and the same documents are passed to `Model.create(docs, { validateBeforeSave: false })` (or `insertMany`), so nothing is built or validated twice. Everything is still validated before writing (an invalid item inserts nothing), save hooks run once per document, and `createScope` checks are untouched. Release as a patch (`[patch]`).
+
 ## [3.1.0] - 2026-10-22
 
 ### Added

@@ -233,9 +233,10 @@ const createHandlers = (c, ctx) => {
       const data = []
       for (const item of isBulk ? req.body : [req.body]) data.push(await prepare(item, req, rules))
       let docs
-      if (isBulk) { // validate everything first: an invalid item inserts nothing
-        await Promise.all(data.map(d => Model.validate(d)))
-        docs = await (c.bulk.insertMany ? Model.insertMany(data) : Model.create(data)) // create() runs save hooks
+      if (isBulk) { // build each document once (applies schema defaults) and validate all before writing: an invalid item inserts nothing
+        const built = data.map(d => new Model(d))
+        await Promise.all(built.map(d => d.validate()))
+        docs = await (c.bulk.insertMany ? Model.insertMany(built) : Model.create(built, { validateBeforeSave: false })) // create() runs save hooks; already validated
       } else docs = await Model.create(data[0])
       if (hooks.afterCreate) await hooks.afterCreate(docs, req)
       reply.code(201)
