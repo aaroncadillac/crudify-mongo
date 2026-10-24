@@ -75,7 +75,7 @@ Without any configuration:
 - `options` only honour `page`, `limit` and `sort`. `limit` defaults to 50 and is capped at 100; `populate`, `select`, `lean` and `pagination: false` from the client are ignored.
 - Writes drop `_id`, `__v` and the timestamps, accept no update operators besides `$set` / `$unset`, and refuse operators nested inside values.
 - Fields with `select: false` in your schema cannot be filtered or sorted on (it would be a search oracle).
-- Bulk creation goes through `Model.create`, so `pre('save')` / `post('save')` hooks always run, and an invalid item inserts nothing.
+- Bulk creation goes through `Model.create`, so `pre('save')` / `post('save')` hooks always run, schema defaults are applied before validating, and an invalid item inserts nothing.
 - Errors are mapped to a fixed shape. Duplicate keys become a generic `409`; unexpected errors become `500 Internal error` (the detail goes to your logs, never to the client).
 - Invalid ids answer `404` without touching the database.
 

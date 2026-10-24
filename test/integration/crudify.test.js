@@ -16,6 +16,7 @@ const schema = new mongoose.Schema({
   sku: { type: String, unique: true, sparse: true },
   email: String,
   status: String,
+  state: { type: String, required: true, default: 'open' },
   secret: { type: String, select: false }
 }, { timestamps: true })
 schema.plugin(paginate)
@@ -169,6 +170,29 @@ describe.each(FASTIFIES)('%s · Crudify (real Mongo)', (_, Fastify) => {
       const res = await req({ method: 'POST', url: '/items', payload: [{ name: 'ok' }, { age: 1 }], headers: h })
       expect(res.statusCode).toBe(400)
       expect(res.json().message).toBe('Fields: [name] are required and cannot be empty')
+      expect(await Item.countDocuments({})).toBe(0)
+    })
+
+    it('bulk without fields that have a default succeeds and stores the defaults', async () => {
+      const { req } = await serve()
+      const res = await req({ method: 'POST', url: '/items', payload: [{ name: 'a' }, { name: 'b', state: 'done' }], headers: h })
+      expect(res.statusCode).toBe(201)
+      const stored = await Item.find({}).sort({ name: 1 }).lean()
+      expect(stored.map(d => d.state)).toEqual(['open', 'done'])
+      expect(counters.save).toBe(2) // save hooks once per document
+    })
+
+    it('bulk with insertMany applies defaults too', async () => {
+      const { req } = await serve({ bulk: { insertMany: true } })
+      expect((await req({ method: 'POST', url: '/items', payload: [{ name: 'a' }, { name: 'b' }], headers: h })).statusCode).toBe(201)
+      expect((await Item.find({}).lean()).map(d => d.state)).toEqual(['open', 'open'])
+    })
+
+    it('an invalid item after valid ones inserts nothing (defaults applied)', async () => {
+      const { req } = await serve()
+      const res = await req({ method: 'POST', url: '/items', payload: [{ name: 'a' }, { name: 'b' }, { age: 1 }], headers: h })
+      expect(res.statusCode).toBe(400)
+      expect(counters.save).toBe(0)
       expect(await Item.countDocuments({})).toBe(0)
     })
 

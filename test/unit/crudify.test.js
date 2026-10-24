@@ -34,6 +34,13 @@ const placed = new mongoose.Schema({
 placed.plugin(paginate)
 const Placed = mongoose.model('Placed', placed)
 
+const defaulted = new mongoose.Schema({
+  name: String,
+  status: { type: String, required: true, default: 'open' }
+})
+defaulted.plugin(paginate)
+const Defaulted = mongoose.model('Defaulted', defaulted)
+
 const stubModel = (Model = Thing) => ({
   paginate: jest.spyOn(Model, 'paginate').mockResolvedValue({ docs: [doc], totalDocs: 1, limit: 50, page: 1 }),
   findOne: jest.spyOn(Model, 'findOne').mockResolvedValue(doc),
@@ -270,8 +277,22 @@ describe.each(FASTIFIES)('%s · Crudify (stubbed model)', (_, Fastify) => {
       const res = await req({ method: 'POST', url: '/things', payload: [{ name: 'a' }, { name: 'b' }] })
       expect(res.statusCode).toBe(201)
       expect(res.json()).toEqual({ message: 'All documents created successfully' })
-      expect(m.create).toHaveBeenCalledWith([{ name: 'a' }, { name: 'b' }])
+      const [built, opts] = m.create.mock.calls[0]
+      expect(built.map(d => d.toObject())).toEqual([expect.objectContaining({ name: 'a' }), expect.objectContaining({ name: 'b' })])
+      expect(built.every(d => d instanceof Thing)).toBe(true)
+      expect(opts).toEqual({ validateBeforeSave: false }) // already validated: no second pass
       expect(m.insertMany).not.toHaveBeenCalled()
+    })
+
+    it('bulk applies schema defaults while validating (required field with a default)', async () => {
+      const m = stubModel(Defaulted)
+      const { req } = await start({ Model: Defaulted, url: '/defaulted' }, { Model: Defaulted })
+      const res = await req({ method: 'POST', url: '/defaulted', payload: [{ name: 'a' }, { name: 'b', status: 'done' }] })
+      expect(res.statusCode).toBe(201)
+      expect(m.create.mock.calls[0][0].map(d => d.status)).toEqual(['open', 'done'])
+      const bad = await req({ method: 'POST', url: '/defaulted', payload: [{ name: 'a' }, { status: '' }] })
+      expect(bad.statusCode).toBe(400)
+      expect(m.create).toHaveBeenCalledTimes(1)
     })
 
     it('insertMany is an explicit opt-in', async () => {
@@ -279,6 +300,7 @@ describe.each(FASTIFIES)('%s · Crudify (stubbed model)', (_, Fastify) => {
       const { req } = await start({ bulk: { insertMany: true } })
       await req({ method: 'POST', url: '/things', payload: [{ name: 'a' }] })
       expect(m.insertMany).toHaveBeenCalled()
+      expect(m.insertMany.mock.calls[0][0][0]).toBeInstanceOf(Thing)
       expect(m.create).not.toHaveBeenCalled()
     })
 
@@ -764,7 +786,7 @@ describe.each(FASTIFIES)('%s · Crudify (stubbed model)', (_, Fastify) => {
 
       const ok = await post(req, [{ name: 'a', tableIds: ['t1'] }, { name: 'b', tableIds: ['t2'] }])
       expect(ok.statusCode).toBe(201)
-      expect(m.create).toHaveBeenCalledWith([
+      expect(m.create.mock.calls[0][0].map(d => d.toObject())).toEqual([
         expect.objectContaining({ restaurantId: 'R1', accountId: 'A' }),
         expect.objectContaining({ restaurantId: 'R2', accountId: 'A' })
       ])
