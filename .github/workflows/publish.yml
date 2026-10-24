@@ -40,7 +40,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PUBLISHED_VERSION: ${{ steps.run-action.outputs.version }}
         run: |
-          VERSION="${PUBLISHED_VERSION:-$(node -p "require('./package.json').version")}"
+          # The publish action's `version` output carries a trailing newline ("v3.1.1\n"),
+          # which made `git ls-remote refs/tags/v3.1.1\n` miss the tag: strip all whitespace.
+          VERSION="$(printf '%s' "${PUBLISHED_VERSION}" | tr -d '[:space:]')"
+          VERSION="${VERSION:-$(node -p "require('./package.json').version")}"
           TAG="v${VERSION#v}"
 
           if ! git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
