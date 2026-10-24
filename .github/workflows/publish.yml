@@ -18,9 +18,11 @@ jobs:
       - name: Installing Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
-          package-manager-cache: false  # never use caching in release builds
+          package-manager-cache: false
+      - name: Show toolchain
+        run: echo "node $(node --version), npm $(npm --version)"
       - name: Config git user & email
         run: |
           git config user.name "$(git log -n 1 --pretty=format:%an)"
@@ -30,7 +32,6 @@ jobs:
         uses: iuccio/npm-semver-publish-action@v1.0.0
         with:
           target-branch: master
-          provenance: true
 
       - name: Create GitHub Release
         if: steps.run-action.outcome == 'success'
