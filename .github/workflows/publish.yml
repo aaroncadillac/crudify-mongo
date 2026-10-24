@@ -25,10 +25,14 @@ jobs:
         run: |
           git config user.name "$(git log -n 1 --pretty=format:%an)"
           git config user.email "$(git log -n 1 --pretty=format:%ae)"
-      - name: Publishing package
+      - name: Publish package
         id: run-action
-        run: |
-            npm publish
+        uses: iuccio/npm-semver-publish-action@v1.0.0
+        with:
+          target-branch: master
+          provenance: true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         if: steps.run-action.outcome == 'success'
