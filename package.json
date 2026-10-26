@@ -22,7 +22,10 @@
     "sanitizer.js",
     "CHANGELOG.md"
   ],
-  "repository": "git@github.com:aaroncadillac/crudify-mongo.git",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aaroncadillac/crudify-mongo.git"
+  },
   "author": "aaroncadillac",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
